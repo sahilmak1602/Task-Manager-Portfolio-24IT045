@@ -22,3 +22,7 @@ describe("Task Manager API Authentication", () => {
         });
     });
 });
+
+test("Temporary CI failure demonstration", () => {
+    expect(1).toBe(2);
+});
