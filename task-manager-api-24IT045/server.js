@@ -363,7 +363,7 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: "Internal server error" });
 });
 
-// Connect to MongoDB before starting the server
+// Connect to MongoDB and start the server
 async function startServer() {
     try {
         if (!process.env.MONGODB_URI) {
@@ -382,4 +382,10 @@ async function startServer() {
     }
 }
 
-startServer();
+// Start automatically only when running: node server.js
+if (require.main === module) {
+    startServer();
+}
+
+// Export the Express app for automated tests
+module.exports = app;
