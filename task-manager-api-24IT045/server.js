@@ -1,6 +1,5 @@
-require("node:dns/promises").setServers(["8.8.8.8", "1.1.1.1"]);
-require("dotenv").config();
 
+require("node:dns/promises").setServers(["8.8.8.8", "1.1.1.1"]);
 require("dotenv").config();
 
 const taskEvents = require("./listeners");
@@ -12,12 +11,12 @@ const jwt = require("jsonwebtoken");
 const Task = require("./models/Task");
 const cache = require("./cache");
 const User = require("./models/User");
+
 const app = express();
-app.use(cors());
-app.use(express.json());
 const PORT = process.env.PORT || 5000;
 
-
+app.use(cors());
+app.use(express.json());
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -27,12 +26,15 @@ app.use((req, res, next) => {
 
 // Validate JSON content type for requests with a body
 app.use((req, res, next) => {
-    if (["POST", "PUT", "PATCH"].includes(req.method) &&
-        !req.is("application/json")) {
+    if (
+        ["POST", "PUT", "PATCH"].includes(req.method) &&
+        !req.is("application/json")
+    ) {
         return res.status(415).json({
             error: "Content-Type must be application/json"
         });
     }
+
     next();
 });
 
@@ -61,7 +63,7 @@ function authenticateToken(req, res, next) {
 // User registration
 app.post("/register", async (req, res, next) => {
     try {
-        const { email, password } = req.body;
+        const { email, password } = req.body || {};
 
         if (
             typeof email !== "string" ||
@@ -126,7 +128,7 @@ app.post("/register", async (req, res, next) => {
 // User login
 app.post("/login", async (req, res, next) => {
     try {
-        const { email, password } = req.body;
+        const { email, password } = req.body || {};
 
         if (
             typeof email !== "string" ||
@@ -179,7 +181,7 @@ app.get("/me", authenticateToken, async (req, res, next) => {
             });
         }
 
-        res.json(user);
+        return res.json(user);
     } catch (err) {
         next(err);
     }
@@ -187,7 +189,7 @@ app.get("/me", authenticateToken, async (req, res, next) => {
 
 // Validate task input before database operations
 function validateTaskInput(req, res, next) {
-    const { title, description, completed, priority } = req.body;
+    const { title, description, completed, priority } = req.body || {};
 
     if (typeof title !== "string" || !title.trim()) {
         return res.status(400).json({
@@ -225,6 +227,7 @@ function validateTaskInput(req, res, next) {
     req.body.title = title.trim();
     next();
 }
+
 // Get all tasks with in-memory caching
 app.get("/tasks", authenticateToken, async (req, res, next) => {
     try {
@@ -241,126 +244,285 @@ app.get("/tasks", authenticateToken, async (req, res, next) => {
 
         cache.set("all_tasks", tasks);
 
-        res.json(tasks);
+        return res.json(tasks);
     } catch (err) {
         next(err);
     }
 });
 
 // Get a task by MongoDB ID
-
-
 app.get("/tasks/:id", authenticateToken, async (req, res, next) => {
     try {
         if (!mongoose.isValidObjectId(req.params.id)) {
-            return res.status(400).json({ error: "Invalid task ID" });
+            return res.status(400).json({
+                error: "Invalid task ID"
+            });
         }
 
         const task = await Task.findById(req.params.id);
 
         if (!task) {
-            return res.status(404).json({ error: "Task not found" });
+            return res.status(404).json({
+                error: "Task not found"
+            });
         }
 
-        res.json(task);
+        return res.json(task);
     } catch (err) {
         next(err);
     }
 });
 
 // Create a task
-app.post("/tasks", authenticateToken, validateTaskInput, async (req, res, next) => {   try {
-        const task = await Task.create({
-            title: req.body.title,
-            description: req.body.description,
-            completed: req.body.completed,
-            priority: req.body.priority
-        });
-cache.del("all_tasks");
-        res.status(201).json(task);
-console.log(`[API] Response sent at ${new Date().toISOString()}`);
-
-taskEvents.emit("task-created", task);
-    } catch (err) {
-        next(err);
-    }
-});
-
-// Update a task
-app.put("/tasks/:id", authenticateToken, validateTaskInput, async (req, res, next) => {    try {
-        if (!mongoose.isValidObjectId(req.params.id)) {
-            return res.status(400).json({ error: "Invalid task ID" });
-        }
-
-        const task = await Task.findByIdAndUpdate(
-            req.params.id,
-            {
+app.post(
+    "/tasks",
+    authenticateToken,
+    validateTaskInput,
+    async (req, res, next) => {
+        try {
+            const task = await Task.create({
                 title: req.body.title,
                 description: req.body.description,
                 completed: req.body.completed,
                 priority: req.body.priority
-            },
-            {
-                new: true,
-                runValidators: true,
-                omitUndefined: true
-            }
-        );
+            });
 
-        if (!task) {
-            return res.status(404).json({ error: "Task not found" });
+            cache.del("all_tasks");
+
+            taskEvents.emit("task-created", task);
+
+            console.log(
+                `[API] Task created at ${new Date().toISOString()}`
+            );
+
+            return res.status(201).json(task);
+        } catch (err) {
+            next(err);
         }
-cache.del("all_tasks");
-        res.json(task);
-    } catch (err) {
-        next(err);
     }
-});
+);
+
+// Update a task
+app.put(
+    "/tasks/:id",
+    authenticateToken,
+    validateTaskInput,
+    async (req, res, next) => {
+        try {
+            if (!mongoose.isValidObjectId(req.params.id)) {
+                return res.status(400).json({
+                    error: "Invalid task ID"
+                });
+            }
+
+            const task = await Task.findByIdAndUpdate(
+                req.params.id,
+                {
+                    title: req.body.title,
+                    description: req.body.description,
+                    completed: req.body.completed,
+                    priority: req.body.priority
+                },
+                {
+                    new: true,
+                    runValidators: true,
+                    omitUndefined: true
+                }
+            );
+
+            if (!task) {
+                return res.status(404).json({
+                    error: "Task not found"
+                });
+            }
+
+            cache.del("all_tasks");
+
+            return res.json(task);
+        } catch (err) {
+            next(err);
+        }
+    }
+);
 
 // Delete a task
-app.delete("/tasks/:id", authenticateToken, async (req, res, next) => {    try {
+app.delete("/tasks/:id", authenticateToken, async (req, res, next) => {
+    try {
         if (!mongoose.isValidObjectId(req.params.id)) {
-            return res.status(400).json({ error: "Invalid task ID" });
+            return res.status(400).json({
+                error: "Invalid task ID"
+            });
         }
 
         const task = await Task.findByIdAndDelete(req.params.id);
 
         if (!task) {
-            return res.status(404).json({ error: "Task not found" });
+            return res.status(404).json({
+                error: "Task not found"
+            });
         }
-cache.del("all_tasks");
-        res.json({
+
+        cache.del("all_tasks");
+
+        taskEvents.emit("task-deleted", task);
+
+        return res.json({
             message: "Task deleted successfully",
             task
         });
-
-taskEvents.emit("task-deleted", task);
     } catch (err) {
         next(err);
     }
 });
 
+
+ // AI-powered task description generation using Groq
+app.post(
+    "/api/ai/generate-description",
+    authenticateToken,
+    async (req, res) => {
+        const title = req.body?.title;
+
+        if (typeof title !== "string" || !title.trim()) {
+            return res.status(400).json({
+                description: "",
+                message: "Task title is required."
+            });
+        }
+
+        if (title.trim().length > 120) {
+            return res.status(400).json({
+                description: "",
+                message: "Task title must be 120 characters or fewer."
+            });
+        }
+
+        if (!process.env.GROQ_API_KEY) {
+            return res.status(503).json({
+                description: "",
+                fallback: true,
+                message: "AI is not configured. Please enter the description manually."
+            });
+        }
+
+        try {
+            const response = await fetch(
+                "https://api.groq.com/openai/v1/chat/completions",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${process.env.GROQ_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: "openai/gpt-oss-20b",
+                        messages: [
+                            {
+                                role: "system",
+                                content:
+                                    "Write a clear, practical task description in 2-3 sentences. Be specific and concise. Do not invent deadlines or personal details."
+                            },
+                            {
+                                role: "user",
+                                content: `Generate a description for this task: ${title.trim()}`
+                            }
+                        ],
+                       temperature: 0.5,
+max_completion_tokens: 1024,
+reasoning_effort: "low",
+include_reasoning: false
+                    }),
+                    signal: AbortSignal.timeout(20000)
+                }
+            );
+
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                console.error("Groq API error:", {
+                    status: response.status,
+                    message: data.error?.message || "Unknown API error"
+                });
+
+                return res.status(503).json({
+                    description: "",
+                    fallback: true,
+                    message:
+                        "AI suggestions are temporarily unavailable. Please write the description manually."
+                });
+            }
+
+            const description =
+                data.choices?.[0]?.message?.content?.trim();
+
+            if (!description) {
+                return res.status(503).json({
+                    description: "",
+                    fallback: true,
+                    message:
+                        "AI returned no description. Please write it manually."
+                });
+            }
+
+            return res.json({ description });
+        } catch (err) {
+            console.error("Groq request failed:", {
+                name: err.name,
+                message:
+                    err.name === "TimeoutError" ||
+                    err.name === "AbortError"
+                        ? "Request timed out"
+                        : err.message
+            });
+
+            return res.status(503).json({
+                description: "",
+                fallback: true,
+                message:
+                    "AI suggestions are temporarily unavailable. Please write the description manually."
+            });
+        }
+    }
+);
+
+
 // Handle unknown routes
 app.use((req, res) => {
-    res.status(404).json({ error: "Route not found" });
+    return res.status(404).json({
+        error: "Route not found"
+    });
 });
 
 // Global error handler
 app.use((err, req, res, next) => {
     console.error(err);
 
+    if (res.headersSent) {
+        return next(err);
+    }
+
     if (err.name === "ValidationError") {
         return res.status(400).json({
             error: "Validation failed",
-            details: Object.values(err.errors).map(e => e.message)
+            details: Object.values(err.errors).map((e) => e.message)
         });
     }
 
     if (err.name === "CastError") {
-        return res.status(400).json({ error: "Invalid ID or data format" });
+        return res.status(400).json({
+            error: "Invalid ID or data format"
+        });
     }
 
-    res.status(500).json({ error: "Internal server error" });
+    if (err.type === "entity.parse.failed") {
+        return res.status(400).json({
+            error: "Invalid JSON request body"
+        });
+    }
+
+    return res.status(500).json({
+        error: "Internal server error"
+    });
 });
 
 // Connect to MongoDB and start the server
@@ -370,7 +532,12 @@ async function startServer() {
             throw new Error("MONGODB_URI is missing from the .env file");
         }
 
+        if (!process.env.JWT_SECRET) {
+            throw new Error("JWT_SECRET is missing from the .env file");
+        }
+
         await mongoose.connect(process.env.MONGODB_URI);
+
         console.log("MongoDB connected successfully");
 
         app.listen(PORT, () => {

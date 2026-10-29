@@ -5,6 +5,7 @@ import {
   createTask,
   updateTask,
   deleteTask,
+  generateTaskDescription,
 } from "../api";
 
 function TaskManager() {
@@ -17,6 +18,7 @@ function TaskManager() {
   const [editingId, setEditingId] = useState(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+const [generatingDescription, setGeneratingDescription] = useState(false);
   const [priority, setPriority] = useState("medium");
 
   async function loadTasks() {
@@ -43,6 +45,39 @@ function TaskManager() {
     setDescription("");
     setPriority("medium");
   }
+
+async function handleGenerateDescription() {
+  if (!title.trim()) {
+    setError("Enter a task title first.");
+    return;
+  }
+
+  setGeneratingDescription(true);
+  setError("");
+  setNotification("");
+
+  try {
+    const data = await generateTaskDescription(title.trim());
+
+    if (!data.description) {
+      setError(
+        data.message || "AI suggestion unavailable. Please write manually."
+      );
+      return;
+    }
+
+    setDescription(data.description);
+    setNotification(
+      "AI-generated suggestion added. Review or edit it before saving."
+    );
+  } catch (err) {
+    setError(
+      err.message || "AI suggestions are unavailable. Please write manually."
+    );
+  } finally {
+    setGeneratingDescription(false);
+  }
+}
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -174,6 +209,21 @@ function TaskManager() {
           onChange={(event) => setDescription(event.target.value)}
           rows={3}
         />
+
+<button
+  type="button"
+  onClick={handleGenerateDescription}
+  disabled={generatingDescription || saving}
+>
+  {generatingDescription
+    ? "Generating description..."
+    : "Generate description with AI"}
+</button>
+
+<p className="ai-disclaimer">
+  AI-generated suggestion — review and edit before saving.
+  Do not submit passwords, personal details, or confidential information.
+</p>
 
         <label htmlFor="task-priority">Priority</label>
         <select

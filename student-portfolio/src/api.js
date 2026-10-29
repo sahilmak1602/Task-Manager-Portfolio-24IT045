@@ -34,7 +34,9 @@ async function apiRequest(path, options = {}, settings = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(data.error || "API request failed");
+    throw new Error(
+  data.message || data.error || "API request failed"
+);
   }
 
   return data;
@@ -87,5 +89,12 @@ export function updateTask(id, task) {
 export function deleteTask(id) {
   return apiRequest(`/tasks/${id}`, {
     method: "DELETE",
+  });
+}
+
+export function generateTaskDescription(title) {
+  return apiRequest("/api/ai/generate-description", {
+    method: "POST",
+    body: JSON.stringify({ title }),
   });
 }
